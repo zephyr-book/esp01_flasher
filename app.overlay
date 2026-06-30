@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) 2026 Centro de Inovacao EDGE
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * ESP-01 (ESP8266) USB <-> UART flashing bridge.
+ *
+ * The ESP module hangs off uart1 (TX=GP20, RX=GP21), already described by the
+ * board's common dtsi. Here we only add the USB side (CDC ACM over the RP2350
+ * native USB device controller) and the ESP power/reset control lines that the
+ * zbook_wifi shield's esp8266 node would normally own -- this app does NOT use
+ * that shield, so uart1 stays a plain UART we can bridge byte-for-byte.
+ */
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	/*
+	 * ESP-01 control lines, mirroring the zbook_wifi shield's esp8266 node:
+	 *   power-gpios = GP19, active-high  (module power / enable)
+	 *   reset-gpios = GP18, active-low   (driven from the host RTS line)
+	 * GPIO0 (bootloader strap) is grounded by hand, so it is not described.
+	 */
+	esp01: esp01 {
+		compatible = "edge,esp01-control";
+		power-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&usbd {
+	status = "okay";
+
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "ESP01 flashing bridge";
+	};
+};

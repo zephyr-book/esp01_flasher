@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Centro de Inovacao EDGE
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  ESP-01 (ESP8266) power and reset control lines for the USB-UART flashing
+  bridge. Mirrors the power-gpios/reset-gpios of the zbook_wifi shield's
+  esp8266 node, but without instantiating the ESP-AT driver so uart1 stays a
+  plain UART that the bridge can drive directly.
+
+compatible: "edge,esp01-control"
+
+properties:
+  power-gpios:
+    type: phandle-array
+    required: true
+    description: Module power / enable line (active high).
+  reset-gpios:
+    type: phandle-array
+    required: true
+    description: Reset line (active low); driven from the host RTS line.
