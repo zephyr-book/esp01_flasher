@@ -65,42 +65,61 @@ also drag the generated `build/zephyr/zephyr.uf2` onto the RP2350 UF2 drive.
 
 > **Prerequisite:** the host needs [esptool](https://github.com/espressif/esptool)
 > **v5 or newer** — install with `pipx install esptool` (or `pip install esptool`).
-> The commands below use the v5 hyphenated subcommands (`write-flash`,
-> `--before default-reset`).
+
+The ESP-01 AT firmware is **not** a single image — it is several binaries written
+at fixed offsets. The matching ESP8266 NONOS SDK 3.0.6 **Nano AT (512+512)** set
+for a **1 MB** flash is vendored under `ESP8266_NONOS_SDK-3.0.6/bin/`, and the
+`just flash-at` recipe writes each one to the right place.
 
 1. Build & flash the bridge firmware onto the RP2350 (above), then connect the
-   board to your Mac over USB. It enumerates as a CDC ACM serial port, e.g.
+   board over USB. It enumerates as a CDC ACM serial port, e.g.
    `/dev/cu.usbmodemXXXX` (macOS) or `/dev/ttyACM0` (Linux).
 2. **Hold ESP `GPIO0` to `GND`** (jumper to ground) to select the bootloader.
-3. Run esptool against the bridge port. Because RTS is wired to the ESP reset,
-   `--before default-reset` resets the chip into the bootloader for you:
+3. Flash. RTS is wired to the ESP reset, so `--before default-reset` drops the
+   chip into the bootloader for you:
 
    ```bash
-   esptool --chip esp8266 --port /dev/cu.usbmodemXXXX --baud 115200 \
-       --before default-reset --after hard-reset \
-       write-flash 0x00000 your-esp8266-firmware.bin
+   just flash-at                            # uses port /dev/tty.usbmodem11401
+   just flash-at port=/dev/cu.usbmodemXXXX  # or override the port
    ```
 
-   - For faster flashing add e.g. `--baud 460800` — the bridge follows the host
-     baud onto `uart1`.
-   - `flash-id` / `read-mac` are good first smoke tests:
-     `esptool --chip esp8266 --port /dev/cu.usbmodemXXXX flash-id`
+   `just flash-at` runs the following from `ESP8266_NONOS_SDK-3.0.6/bin/`:
+
+   ```bash
+   esptool --chip esp8266 --port /dev/cu.usbmodemXXXX --baud 460800 \
+       --before default-reset --after hard-reset \
+       write-flash --flash-size 1MB --flash-mode dio --flash-freq 40m \
+       0x00000 boot_v1.7.bin \
+       0x01000 ./at/512+512/user1.1024.new.2.bin \
+       0xfc000 esp_init_data_default_v08.bin \
+       0x7e000 blank.bin \
+       0xfe000 blank.bin
+   ```
+
+   - Smoke test first: `esptool --chip esp8266 --port /dev/cu.usbmodemXXXX flash-id`.
+   - Lower `esp_baud` in the `justfile` if 460800 is flaky (115200 always works).
+   - If Wi-Fi misbehaves afterwards, swap `esp_init_data_default_v08.bin` for the
+     `…_v05.bin`; if the chip boot-loops, retry with `--flash-mode dout`.
 4. When done, **remove the GPIO0 jumper** and let `--after hard-reset` (RTS) or a
-   power cycle restart the ESP into the freshly-flashed firmware.
+   power cycle restart the ESP into the freshly-flashed AT firmware.
 
 ### If auto-reset misbehaves
 
 Some hosts/timings don't drive RTS the way the ESP expects through a USB bridge.
-Fall back to manual reset:
+Keep GPIO0 grounded, drop the ESP into the bootloader by hand (power-cycle, or
+pulse RTS from your terminal), then run the same flash with auto-reset disabled —
+from `ESP8266_NONOS_SDK-3.0.6/bin/`:
 
 ```bash
 esptool --chip esp8266 --port /dev/cu.usbmodemXXXX \
     --before no-reset --after no-reset \
-    write-flash 0x00000 your-esp8266-firmware.bin
+    write-flash --flash-size 1MB --flash-mode dio --flash-freq 40m \
+    0x00000 boot_v1.7.bin \
+    0x01000 ./at/512+512/user1.1024.new.2.bin \
+    0xfc000 esp_init_data_default_v08.bin \
+    0x7e000 blank.bin \
+    0xfe000 blank.bin
 ```
-
-With GPIO0 grounded, power-cycle / reset the ESP by hand just before running the
-command so it is already sitting in the bootloader.
 
 ---
 
